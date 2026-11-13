@@ -37,7 +37,8 @@ const NOT_MONEY: RegExp[] = [
   /\b[xX*•#]{2,}[\s-]?\d{2,6}\b/g, //                 xxxx-8820
   /\b\d{0,2}[xX*#]{3,}[\s-]?\d{2,6}\b/g, //                4xxxx8820
   /\b\d+(?:\.\d+)?\s*%/g, //                               4.250%
-  /\b\d[\d,]*(?:\.\d+)?\s*(?:days?|months?|years?|shares?|units?|sf|square\s+feet)\b/gi,
+  // 90 days, 90 calendar days, 4 years
+  /\b\d[\d,]*(?:\.\d+)?\s*(?:\w+\s+)?(?:days?|months?|years?|shares?|units?|sf|square\s+feet)\b/gi,
   /\b(?:January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)\.?\s+\d{1,2},?\s+\d{4}\b/gi,
   /\b(?:19|20)\d{2}\b(?![\d.,])/g, //                      a bare year
   /#\s?\d+/g, //                                           cheque numbers
@@ -46,6 +47,8 @@ const NOT_MONEY: RegExp[] = [
   /\b[A-Z]{2}\s+\d{5}(?:-\d{4})?\b/g, //                   MD 20850
   /\(?\d{3}\)?[\s.-]\d{3}[\s.-]\d{4}\b/g, //               phone numbers
   /\b(?:ID|No\.?|Number|Claim|Suite|Ste\.?|Apt\.?|Unit)\s*#?\s*\d[\d-]*/gi,
+  // Street addresses in letterheads: "1150 Lakeside Drive", "14 Ashfield Lane"
+  /\b\d{1,6}\s+(?:[A-Z][A-Za-z]*\s+){1,3}(?:Street|St|Avenue|Ave|Road|Rd|Drive|Dr|Lane|Ln|Boulevard|Blvd|Way|Court|Ct|Place|Pl|Plaza|Circle|Cir|Terrace|Trail|Parkway|Pkwy|Highway|Hwy|Centre|Center)\b\.?/g,
 ];
 
 /** Blank out every digit-bearing run that is not an amount. */
@@ -167,6 +170,10 @@ export function findPeriod(text: string): string | null {
   const m = PERIOD_RE.exec(text);
   if (!m) return null;
   const cleaned = m[1].replace(/\s+/g, " ").trim().replace(/[.;,]$/, "");
+  // Azure returns markdown tables as HTML, so "elimination period</td>" matches.
+  if (!cleaned || cleaned.includes("<") || cleaned.includes(">")) return null;
+  // A period names dates. Without a year it is some other use of the word.
+  if (!/\d{4}/.test(cleaned)) return null;
   return cleaned.length >= 4 ? cleaned : null;
 }
 

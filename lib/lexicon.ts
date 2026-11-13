@@ -86,6 +86,28 @@ export const SUBTOTAL_RE =
 export const VALUE_HEADER_RE =
   /\b(closing|ending|current|market|present|statement)\s*(balance|value)?\b|\bbalance\b|\bvalue\b|\bamount\b|\bowed\b|\boutstanding\b|\btotal\b/i;
 
+/**
+ * Coverage and borrowing capacity, which are never assets.
+ *
+ * A benefit pool, a death benefit and an unused credit line are all amounts
+ * someone *might* receive under a contract. None can be withdrawn, spent or
+ * assigned today, so none belongs in an asset total. They are reported in
+ * their own sections instead.
+ */
+export const COVERAGE_RE =
+  /\bbenefit\s+pool\b|\bpool\s+remaining\b|\blifetime\s+(maximum|benefit)\b|\bmaximum\s+(lifetime|benefit)\b|\bdaily\s+(maximum\s+)?benefit\b|\bmonthly\s+(maximum\s+)?benefit\b|\bdeath\s+benefit\b|\bface\s+(amount|value)\b|\bcoverage\s+amount\b|\bbenefits?\s+paid\s+to\s+date\b|\bavailable\s+(credit|principal|line)\b|\bcredit\s+(limit|line)\b|\bline\s+of\s+credit\b|\bnet\s+principal\s+limit\b|\bprincipal\s+limit\b/i;
+
+/**
+ * A restatement of a figure already captured, not an additional one.
+ *
+ * A payoff quote, an opening balance and a "less: current loan balance"
+ * working line all refer to the same debt as the principal line beside them.
+ * Summing them triples it, so they are kept visible with their provenance but
+ * excluded from the totals, exactly as subtotals are.
+ */
+export const ALTERNATIVE_MEASURE_RE =
+  /\bpayoff\b|\b(opening|beginning)\s+(balance|loan)\b|\bbalance\s+(forward|brought\s+forward)\b|^\s*less\b|\bless:\s/i;
+
 /** Column headers that must never be read as a current value. */
 export const DECOY_HEADER_RE =
   /\b(opening|beginning|prior|previous|cost\s+basis|basis|purchase|original|year[\s-]?to[\s-]?date|ytd|last\s+year|deposits?|withdrawals?|credits?|debits?|shares?|units?|quantity|price|rate|%|percent)\b/i;

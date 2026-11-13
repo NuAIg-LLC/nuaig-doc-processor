@@ -14,8 +14,10 @@
  */
 
 import {
+  ALTERNATIVE_MEASURE_RE,
   APPROXIMATE_RE,
   ASSET_RULES,
+  COVERAGE_RE,
   COLA_RE,
   CONDITIONAL_RE,
   DECOY_HEADER_RE,
@@ -414,6 +416,14 @@ function classify(c: Candidate): Verdict {
    */
   const flowsOnly = c.source === "ledger";
 
+  /*
+   * Coverage is not a holding. A benefit pool's notes column reading
+   * "Coverage, not cash" is enough for the catch-all cash rule to claim it as
+   * a liquid asset, which is the single worst thing this engine could do, so
+   * the label is checked before any asset or liability rule runs.
+   */
+  if (COVERAGE_RE.test(c.label)) return { bucket: "none", score: 0 };
+
   if (!flowsOnly) {
     for (const rule of LIABILITY_RULES) {
       if (!rule.re.test(text)) continue;
@@ -463,29 +473,68 @@ function classify(c: Candidate): Verdict {
 /* ──────────────────────────── targeted readers ─────────────────────────── */
 
 function readInsurance(markdown: string, layout: LayoutResult): InsurancePolicy[] {
-  if (!/\blong[\s-]term\s+care\b|\bLTC\b|\bbenefit\s+pool\b|\bdaily\s+benefit\b|\bcash\s+surrender\b|\bwhole\s+life\b/i.test(markdown)) {
+  /*
+   * Merely mentioning long-term care is not a policy. An SSA letter saying
+   * "if you are applying for assistance with long-term care costs" would
+   * otherwise produce a policy that does not exist, so the gate asks for a
+   * feature only an actual policy document has.
+   */
+  if (
+    !/\bbenefit\s+pool\b|\b(?:daily|monthly)\s+maximum\s+benefit\b|\bmaximum\s+(?:daily|monthly)\s+benefit\b|\bcash\s+surrender\b|\bdeath\s+benefit\b|\bface\s+(?:amount|value)\b|\bpolicy\s+number\b|\belimination\s+period\b/i.test(
+      markdown,
+    )
+  ) {
     return [];
   }
 
   const grab = (re: RegExp): Amount => {
     const m = re.exec(markdown);
-    return m ? parseMoney(m[1] ?? m[0]) : parseMoney(null);
+    if (!m) return parseMoney(null);
+    const captured = m.slice(1).find((g) => g != null);
+    return parseMoney(captured ?? m[0]);
   };
 
-  const daily = grab(/\bdaily\s+(?:maximum\s+)?benefit\b[^$\d\n]{0,30}(\$?[\d,]+(?:\.\d{2})?)/i);
-  const monthly = grab(/\bmonthly\s+(?:maximum\s+)?benefit\b[^$\d\n]{0,30}(\$?[\d,]+(?:\.\d{2})?)/i);
+  /*
+   * Azure renders tables as HTML, so a label and its amount are separated by
+   * "</td>\n<td>". Any gap pattern that excludes newlines can never bridge
+   * that, which is why these must allow one.
+   */
+  const GAP = "[^$\\d]{0,40}";
+  const AMT = "(\\$?[\\d,]+(?:\\.\\d{2})?)";
+  const near = (label: string) => new RegExp(`${label}${GAP}${AMT}`, "i");
+
+  const daily = grab(near("\\bdaily\\s+(?:maximum\\s+)?benefit\\b"));
+  const monthly = grab(near("\\bmonthly\\s+(?:maximum\\s+)?benefit\\b"));
   const pool = grab(
-    /\b(?:lifetime\s+(?:maximum|benefit)|benefit\s+pool|maximum\s+lifetime)\b[^$\d\n]{0,40}(\$?[\d,]+(?:\.\d{2})?)/i,
+    near("\\b(?:lifetime\\s+(?:maximum|benefit)|benefit\\s+pool|maximum\\s+lifetime)\\b"),
   );
   const remaining = grab(
-    /\b(?:pool\s+)?remaining\b[^$\d\n]{0,40}(\$?[\d,]+(?:\.\d{2})?)|\bbenefits?\s+remaining\b[^$\d\n]{0,40}(\$?[\d,]+(?:\.\d{2})?)/i,
+    near("\\b(?:benefit\\s+)?pool\\s+remaining\\b|\\bbenefits?\\s+remaining\\b|\\bremaining\\s+benefit\\b"),
   );
-  const premiumMonthly = grab(/\bpremium\b[^$\d\n]{0,30}(\$?[\d,]+(?:\.\d{2})?)\s*(?:per\s+month|\/\s*mo|monthly)/i);
-  const premiumAnnual = grab(/\b(?:annual\s+premium|premium\s+(?:per\s+year|annually))\b[^$\d\n]{0,30}(\$?[\d,]+(?:\.\d{2})?)/i);
+  // Either word order: "premium per month | $336" or "premium | $336 per month".
+  const premiumMonthly = grab(
+    new RegExp(
+      `\\b(?:monthly\\s+premium|premium\\s+per\\s+month|premium\\s+monthly)\\b${GAP}${AMT}` +
+        `|\\bpremium\\b${GAP}${AMT}\\s*(?:per\\s+month|/\\s*mo\\b|monthly)`,
+      "i",
+    ),
+  );
+  const premiumAnnual = grab(
+    near("\\b(?:annual\\s+premium|premium\\s+(?:per\\s+year|annually)|yearly\\s+premium)\\b"),
+  );
+  /*
+   * For a whole life policy the death benefit is the ceiling on what the
+   * contract will ever pay, so it plays the part the benefit pool plays in an
+   * LTC policy. The cash surrender value is deliberately not read here: that
+   * one genuinely can be realised, so it belongs in the asset list.
+   */
+  const death = grab(near("\\bdeath\\s+benefit\\b|\\bface\\s+(?:amount|value)\\b"));
 
-  const elimMatch = /\belimination\s+period\b[^\d\n]{0,30}(\d{1,3})\s*(?:calendar\s+)?days?/i.exec(markdown);
+  const elimMatch = /\belimination\s+period\b[^\d]{0,40}(\d{1,3})\s*(?:\w+\s+)?days?/i.exec(markdown);
   const inflationMatch = /\b(\d+%\s*(?:compound|simple)(?:\s+inflation)?|no\s+inflation\s+protection|compound\s+inflation|simple\s+inflation)\b/i.exec(markdown);
-  const carrierMatch = /\b(?:carrier|insurer|underwritten\s+by|issued\s+by|company)\b[:\s]+([A-Z][\w&.,'\s-]{2,48})/i.exec(markdown);
+  // Not a bare "company": that matches the tail of "Crestline Mutual
+  // Insurance Company" and captures the address printed after it.
+  const carrierMatch = /\b(?:carrier|insurer|underwritten\s+by|issued\s+by|insurance\s+company)\b[:\s]+([A-Z][\w&.'\s-]{2,48})/i.exec(markdown);
 
   const policyType = /\blong[\s-]term\s+care\b/i.test(markdown)
     ? "Long-term care"
@@ -503,6 +552,7 @@ function readInsurance(markdown: string, layout: LayoutResult): InsurancePolicy[
     daily.value != null ||
     monthly.value != null ||
     pool.value != null ||
+    death.value != null ||
     premiumMonthly.value != null ||
     premiumAnnual.value != null;
 
@@ -511,11 +561,14 @@ function readInsurance(markdown: string, layout: LayoutResult): InsurancePolicy[
   return [
     {
       policy_type: policyType,
-      carrier: carrierMatch ? carrierMatch[1].trim().replace(/[.,]$/, "") : null,
+      // A letterhead names the carrier when the body never labels it.
+      carrier: carrierMatch
+        ? carrierMatch[1].replace(/\s+/g, " ").trim().replace(/[.,]$/, "")
+        : readIssuer(layout),
       daily_benefit: daily.value,
       monthly_equivalent:
         monthly.value ?? (daily.value != null ? cents(daily.value * 30.44) : null),
-      lifetime_pool: pool.value,
+      lifetime_pool: pool.value ?? death.value,
       pool_remaining: remaining.value,
       elimination_period_days: elimMatch ? Number(elimMatch[1]) : null,
       inflation_protection: inflationMatch ? inflationMatch[0] : null,
@@ -703,8 +756,17 @@ function firstLine(text: string): string {
  * An issuer block usually runs "Name, N.A." then a street address on the
  * following lines. Keep the first line, and never cut a word in half.
  */
+const ISSUER_TAIL_RE =
+  /\s+(?:\d{1,6}\s+[A-Z][A-Za-z]*\s+(?:Street|St|Avenue|Ave|Road|Rd|Drive|Dr|Lane|Ln|Boulevard|Blvd|Way|Court|Ct|Place|Pl|Plaza|Circle|Cir|Terrace|Parkway|Pkwy|Centre|Center)\b|P\.?\s?O\.?\s+Box\b).*$/i;
+
 function tidyIssuer(text: string): string {
-  const firstLine = text.split(/\r?\n/)[0].replace(/\s+/g, " ").trim();
+  const firstLine = text
+    .split(/\r?\n/)[0]
+    .replace(/\s+/g, " ")
+    // Letterheads run the name straight into the mailing address.
+    .replace(ISSUER_TAIL_RE, "")
+    .replace(/[,;:]\s*$/, "")
+    .trim();
   if (firstLine.length <= 70) return firstLine;
   const cut = firstLine.slice(0, 70);
   const lastSpace = cut.lastIndexOf(" ");
@@ -779,7 +841,8 @@ export function extractFields(layout: LayoutResult, filename: string): Extractio
     if (seen.has(key)) continue;
     seen.add(key);
 
-    const isSubtotal = SUBTOTAL_RE.test(c.label);
+    // Restatements of a figure already captured are excluded from sums too.
+    const isSubtotal = SUBTOTAL_RE.test(c.label) || ALTERNATIVE_MEASURE_RE.test(c.label);
     const verdict = classify(c);
 
     // Capture the document's own totals while they pass through.
@@ -960,7 +1023,16 @@ export function extractFields(layout: LayoutResult, filename: string): Extractio
     });
   }
 
-  if (!accounts.length && !liabilities.length && !income.length && !expenses.length) {
+  const foundSomething =
+    accounts.length > 0 ||
+    liabilities.length > 0 ||
+    income.length > 0 ||
+    expenses.length > 0 ||
+    insurance.length > 0 ||
+    transfers.length > 0 ||
+    timedProceeds.length > 0;
+
+  if (!foundSomething) {
     warnings.push({
       severity: "caution",
       message:
@@ -976,9 +1048,17 @@ export function extractFields(layout: LayoutResult, filename: string): Extractio
     ...income.map((s) => s.confidence),
     ...expenses.map((e) => e.confidence),
   ];
+  /*
+   * A policy summary yields coverage and premiums but no asset, liability,
+   * income or expense line. Averaging an empty list to zero would report a
+   * correct reading as 5% confident, so fall back to how well the document
+   * type itself was identified.
+   */
   const meanConfidence = lineConfidences.length
     ? lineConfidences.reduce((a, b) => a + b, 0) / lineConfidences.length
-    : 0;
+    : foundSomething
+      ? docType.confidence
+      : 0;
 
   const conflicts = warnings.filter((w) => w.severity === "conflict").length;
   const overall = Math.max(
