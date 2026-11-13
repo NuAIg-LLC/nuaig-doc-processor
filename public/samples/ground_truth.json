@@ -1,0 +1,507 @@
+{
+  "_about": "Reference notes for each synthetic test document. All documents are fictional. Nothing here is compared automatically; it is context for a human reviewing the extracted position.",
+  "_pii_note": "Every document deliberately contains identity data. The extractor must isolate financial fields from identity fields and report identity only as types, never values.",
+  "01_bank_statement_meridian.pdf": {
+    "title": "Bank statement",
+    "category": "Deposit accounts",
+    "layout": "Ruled tables, two pages, multiple accounts plus a transaction ledger",
+    "tests": [
+      "sub-account versus total aggregation",
+      "look-back transfer detection from a ledger memo",
+      "recurring income identified from transaction descriptions"
+    ],
+    "traps": [
+      "The $500.00 movement on 08 Jan is between the holder's own accounts. It is neither income nor a gift.",
+      "Total on deposit is a sum of the three accounts above it. Adding it to them double-counts $153,222.67.",
+      "The Opening Balance column must not be read as the current balance."
+    ],
+    "expected": {
+      "liquid_assets": {
+        "checking": 14282.55,
+        "savings": 63940.12,
+        "certificate_of_deposit": 75000,
+        "total_on_deposit": 153222.67
+      },
+      "monthly_income_observed": {
+        "social_security": 2184,
+        "pension": 1642.5,
+        "ira_distribution": 2366.67
+      },
+      "lookback_transfers": [
+        {
+          "date": "2025-12-19",
+          "amount": 45000,
+          "relationship": "daughter",
+          "is_gift": true
+        }
+      ]
+    },
+    "pii_present": [
+      "full name",
+      "street address",
+      "account number"
+    ]
+  },
+  "02_brokerage_equity_harborview.pdf": {
+    "title": "Brokerage and equity portfolio statement",
+    "category": "Investments",
+    "layout": "Dense seven-column holdings grid with a negative cash sweep and an allocation band",
+    "tests": [
+      "read the portfolio total from a summary band rather than a table row",
+      "negative cash sweep recorded as an obligation, not a negative asset",
+      "cost basis column must not be mistaken for market value",
+      "quarterly income must not be read as monthly"
+    ],
+    "traps": [
+      "The CASH SWEEP line is negative (-$3,775.27). It is a margin debit, which is a liability.",
+      "Cost Basis sits immediately left of Market Value. Reading it yields $331,804.12 instead of $412,860.44.",
+      "Income this period of $4,286.65 is a quarterly figure, not a monthly one."
+    ],
+    "expected": {
+      "portfolio_value": 412860.44,
+      "beginning_value": 398221.19,
+      "cash_sweep": -3775.27,
+      "income_this_quarter": {
+        "dividends": 2884.1,
+        "interest": 1402.55,
+        "total": 4286.65
+      },
+      "systematic_withdrawal_monthly": 2366.67
+    },
+    "pii_present": [
+      "full name",
+      "trust registration",
+      "account number"
+    ]
+  },
+  "03_ssa_award_letter.pdf": {
+    "title": "Social Security award letter",
+    "category": "Benefit income",
+    "layout": "Narrative prose only, zero tables, amounts embedded in sentences",
+    "tests": [
+      "amounts embedded in sentences",
+      "gross versus net distinction",
+      "COLA language"
+    ],
+    "traps": [
+      "The deposited amount of $2,009.10 is net of the Medicare Part B premium. Gross benefit is $2,184.00.",
+      "There is no table anywhere in this document. A table-only extractor returns nothing."
+    ],
+    "expected": {
+      "monthly_benefit_gross": 2184,
+      "medicare_part_b_premium": 174.9,
+      "monthly_deposit_net": 2009.1,
+      "cola_percent": 2.5
+    },
+    "pii_present": [
+      "full name",
+      "street address",
+      "social security number",
+      "date of birth"
+    ]
+  },
+  "04_pension_annuity_crestline.pdf": {
+    "title": "Pension and annuity election statement",
+    "category": "Benefit income",
+    "layout": "Benefit election with a conditional survivor continuation and a COLA rider",
+    "tests": [
+      "survivor benefit is conditional, not current income",
+      "annual figure must be converted and the conversion flagged",
+      "net versus gross after a health deduction"
+    ],
+    "traps": [
+      "The 50% survivor continuation of $821.25 is payable only on the death of the primary annuitant. It is not current income.",
+      "The annual figure of $19,710.00 and the monthly figure of $1,642.50 describe the same benefit. Counting both doubles it.",
+      "The deposited figure is net of a $118.00 retiree health deduction."
+    ],
+    "expected": {
+      "monthly_gross": 1642.5,
+      "annual_gross": 19710,
+      "health_deduction_monthly": 118,
+      "monthly_net": 1524.5,
+      "survivor_percentage": 50,
+      "survivor_monthly_conditional": 821.25,
+      "cola": true
+    },
+    "pii_present": [
+      "full name",
+      "date of birth",
+      "account number"
+    ]
+  },
+  "05_form_1099r.pdf": {
+    "title": "Form 1099-R",
+    "category": "Tax documents",
+    "layout": "IRS box-numbered grid, gross distribution against taxable amount",
+    "tests": [
+      "box-numbered layout rather than labelled rows",
+      "gross distribution is not the same as taxable amount",
+      "an annual distribution must not be read as monthly"
+    ],
+    "traps": [
+      "Box 1 gross distribution of $28,400.04 is annual. The monthly equivalent is $2,366.67.",
+      "Box 2a taxable amount of $26,118.04 is lower than box 1. Neither is a monthly income figure.",
+      "Box 4 federal withholding of $2,840.00 is not an expense of the resident."
+    ],
+    "expected": {
+      "box1_gross_distribution": 28400.04,
+      "box2a_taxable_amount": 26118.04,
+      "box4_federal_withheld": 2840,
+      "box7_distribution_code": "7",
+      "monthly_equivalent": 2366.67
+    },
+    "pii_present": [
+      "full name",
+      "street address",
+      "social security number",
+      "account number"
+    ]
+  },
+  "06_ltc_policy_summary.pdf": {
+    "title": "Long-term care policy summary",
+    "category": "Insurance coverage",
+    "layout": "Benefit schedule with a lifetime pool, elimination period and inflation rider",
+    "tests": [
+      "a benefit pool is coverage, not an asset",
+      "daily benefit must be converted to a monthly equivalent correctly",
+      "the premium is an expense while the pool is not an asset"
+    ],
+    "traps": [
+      "The $328,500 lifetime maximum is coverage. Adding it to assets overstates the estate by a third of a million dollars.",
+      "The daily benefit of $210.00 is not $210 per month.",
+      "The 90-day elimination period means no benefit is payable for the first three months of a claim."
+    ],
+    "expected": {
+      "daily_benefit": 210,
+      "monthly_equivalent": 6391,
+      "lifetime_pool": 328500,
+      "pool_remaining": 301200,
+      "elimination_period_days": 90,
+      "inflation_protection": "3% compound",
+      "premium_monthly": 336.67,
+      "premium_annual": 4040.04,
+      "in_force": true
+    },
+    "pii_present": [
+      "full name",
+      "date of birth",
+      "account number"
+    ]
+  },
+  "07_family_asset_debt_worksheet.pdf": {
+    "title": "Family-prepared asset and debt worksheet",
+    "category": "Family disclosure",
+    "layout": "Informal worksheet with unknown placeholders and arithmetic that does not reconcile",
+    "tests": [
+      "unknown values must stay unknown rather than becoming zero",
+      "a stated total that disagrees with its line items must raise a conflict",
+      "approximate figures must be flagged as approximate"
+    ],
+    "traps": [
+      "Two lines carry ??? and must be recorded as unknown, never as $0.",
+      "The stated total of $240,000 does not equal the sum of the listed lines. Both figures must be surfaced.",
+      "Several figures are prefixed 'about' and are approximations.",
+      "This document was prepared by a family member and carries no institutional verification."
+    ],
+    "expected": {
+      "stated_total_assets": 240000,
+      "listed_lines_sum_known": 218500,
+      "unknown_lines": 2,
+      "liabilities_listed": {
+        "credit_card": 8400,
+        "dental": null
+      }
+    },
+    "pii_present": [
+      "full name"
+    ]
+  },
+  "08_property_settlement_statement.pdf": {
+    "title": "Property settlement statement",
+    "category": "Real estate",
+    "layout": "ALTA-style closing statement with a superseded net-to-seller figure",
+    "tests": [
+      "a future-dated lump sum is not a current balance",
+      "a superseded figure must be replaced and the original raised as a warning",
+      "the mortgage payoff is a liability extinguished at closing"
+    ],
+    "traps": [
+      "An earlier net-to-seller figure of $275,000.00 appears on page 1 and is superseded by $268,412.55.",
+      "Settlement is dated 30 April 2026, in the future. The proceeds are not a current asset.",
+      "The gross sale price of $412,000 is not the amount the seller receives."
+    ],
+    "expected": {
+      "sale_price": 412000,
+      "mortgage_payoff": 128400.18,
+      "net_to_seller_superseded": 275000,
+      "net_to_seller_final": 268412.55,
+      "settlement_date": "2026-04-30"
+    },
+    "pii_present": [
+      "full name",
+      "street address"
+    ]
+  },
+  "09_consolidated_couple_vance.pdf": {
+    "title": "Consolidated household summary (couple)",
+    "category": "Household summary",
+    "layout": "Two residents, per-owner attribution across joint and individual accounts",
+    "tests": [
+      "ownership attribution across joint and individual accounts",
+      "a joint account must not be double-counted against both residents",
+      "household totals against per-resident totals"
+    ],
+    "traps": [
+      "The joint checking balance appears once under Joint. Attributing it to both residents doubles it.",
+      "Only one spouse receives the pension. The other receives Social Security only.",
+      "The household total is a sum. It is not an additional account."
+    ],
+    "expected": {
+      "joint_assets": 96400.22,
+      "resident_1_assets": 184200,
+      "resident_2_assets": 71850.4,
+      "household_total": 352450.62,
+      "household_liabilities": 41200
+    },
+    "pii_present": [
+      "full name",
+      "street address",
+      "account number"
+    ]
+  },
+  "10_401k_statement_northstar.pdf": {
+    "title": "401(k) participant statement",
+    "category": "Retirement accounts",
+    "layout": "Participant statement with vesting, employer match and an outstanding plan loan",
+    "tests": [
+      "vested balance against total balance",
+      "an outstanding participant loan is a liability inside a retirement asset",
+      "year-to-date contribution columns are not balances"
+    ],
+    "traps": [
+      "The outstanding participant loan of $12,480.00 is a debt against the plan, not part of the balance available.",
+      "Total balance $284,610.33 and vested balance $276,118.21 differ. Only the vested amount is accessible.",
+      "YTD contributions of $7,200 is a flow, not a balance."
+    ],
+    "expected": {
+      "total_balance": 284610.33,
+      "vested_balance": 276118.21,
+      "unvested": 8492.12,
+      "outstanding_loan": 12480,
+      "loan_monthly_payment": 268.44,
+      "ytd_contributions": 7200
+    },
+    "pii_present": [
+      "full name",
+      "social security number",
+      "account number",
+      "date of birth"
+    ]
+  },
+  "11_ira_rmd_notice.pdf": {
+    "title": "Traditional IRA statement and RMD notice",
+    "category": "Retirement accounts",
+    "layout": "IRA balance with a required minimum distribution schedule and withholding election",
+    "tests": [
+      "the IRA balance is an asset while the RMD is an income stream",
+      "an annual RMD must be converted to monthly and flagged",
+      "the prior year-end balance is the RMD basis, not the current balance"
+    ],
+    "traps": [
+      "The account balance and the RMD are two different things. Counting the RMD as an additional asset double-counts it.",
+      "The RMD of $9,884.40 is annual. The monthly equivalent is $823.70.",
+      "The 12/31/2025 balance of $258,400.19 is the RMD basis, not today's balance of $261,772.08."
+    ],
+    "expected": {
+      "current_balance": 261772.08,
+      "prior_year_end_balance": 258400.19,
+      "rmd_annual": 9884.4,
+      "rmd_monthly_equivalent": 823.7,
+      "life_expectancy_factor": 26.5,
+      "withholding_percent": 10
+    },
+    "pii_present": [
+      "full name",
+      "social security number",
+      "account number",
+      "date of birth"
+    ]
+  },
+  "12_real_estate_appraisal.pdf": {
+    "title": "Residential real estate appraisal",
+    "category": "Real estate",
+    "layout": "Uniform residential appraisal with a comparable sales grid and a reconciled opinion of value",
+    "tests": [
+      "the opinion of value is the asset, not the comparable sale prices",
+      "the assessed value differs from the appraised value",
+      "an outstanding mortgage against the property is a separate liability"
+    ],
+    "traps": [
+      "The comparable sales grid lists three other properties' prices. None of them is the subject's value.",
+      "County assessed value of $338,500 is not the market value of $412,000.",
+      "The prior appraisal of $369,000 from 2021 is historic and superseded."
+    ],
+    "expected": {
+      "appraised_value": 412000,
+      "county_assessed_value": 338500,
+      "prior_appraisal_2021": 369000,
+      "comparables": [
+        398000,
+        425000,
+        406500
+      ],
+      "outstanding_mortgage": 128400.18,
+      "estimated_equity": 283599.82
+    },
+    "pii_present": [
+      "street address",
+      "full name"
+    ]
+  },
+  "13_mortgage_statement.pdf": {
+    "title": "Mortgage account statement",
+    "category": "Secured debt",
+    "layout": "Monthly servicing statement with principal, escrow and a payoff quote",
+    "tests": [
+      "principal balance is the liability, not the monthly payment",
+      "escrow balance is an asset held by the servicer, not a reduction of the debt",
+      "the payoff quote exceeds the principal balance"
+    ],
+    "traps": [
+      "The escrow balance of $2,418.60 is money held on the borrower's behalf. It does not reduce the principal.",
+      "The payoff amount of $128,812.78 is higher than the principal balance of $128,400.18 because of accrued interest.",
+      "The monthly payment of $1,412.60 includes escrow. Only $972.14 of it services the loan."
+    ],
+    "expected": {
+      "principal_balance": 128400.18,
+      "escrow_balance": 2418.6,
+      "payoff_quote": 128812.78,
+      "monthly_payment_total": 1412.6,
+      "principal_and_interest": 972.14,
+      "interest_rate": 4.25,
+      "maturity_date": "2034-09-01"
+    },
+    "pii_present": [
+      "full name",
+      "street address",
+      "account number"
+    ]
+  },
+  "14_reverse_mortgage_hecm.pdf": {
+    "title": "Reverse mortgage (HECM) statement",
+    "category": "Secured debt",
+    "layout": "Home equity conversion mortgage with a growing balance and an available credit line",
+    "tests": [
+      "an available credit line is borrowing capacity, not an asset",
+      "the loan balance increases over time rather than amortising",
+      "accrued interest and MIP are part of the balance owed"
+    ],
+    "traps": [
+      "Available line of credit of $84,200.00 is money that can be borrowed. It is not cash the resident holds.",
+      "The balance grows every month. Last year's figure understates today's debt.",
+      "Net principal limit is not equity and is not an asset."
+    ],
+    "expected": {
+      "loan_balance": 196840.55,
+      "available_credit_line": 84200,
+      "principal_limit": 281040.55,
+      "property_value": 412000,
+      "accrued_interest_ytd": 11204.18,
+      "mip_accrued_ytd": 1988.4,
+      "interest_rate": 6.84
+    },
+    "pii_present": [
+      "full name",
+      "street address",
+      "account number",
+      "date of birth"
+    ]
+  },
+  "15_credit_card_medical_debt.pdf": {
+    "title": "Credit card statement and medical account summary",
+    "category": "Unsecured debt",
+    "layout": "Revolving card balance with minimum payment, plus itemised patient balances",
+    "tests": [
+      "minimum payment is not the balance owed",
+      "an insurance-adjusted patient responsibility is the real liability",
+      "a payment plan instalment is a monthly obligation"
+    ],
+    "traps": [
+      "The minimum payment due of $192.00 is not the debt. The balance is $8,412.77.",
+      "The billed charges of $18,440.00 are not owed. Patient responsibility after insurance is $3,187.42.",
+      "The available credit of $6,587.23 is borrowing capacity, not an asset."
+    ],
+    "expected": {
+      "card_balance": 8412.77,
+      "card_minimum_payment": 192,
+      "card_apr": 24.99,
+      "card_available_credit": 6587.23,
+      "medical_billed": 18440,
+      "medical_insurance_adjustment": 15252.58,
+      "medical_patient_responsibility": 3187.42,
+      "medical_payment_plan_monthly": 125
+    },
+    "pii_present": [
+      "full name",
+      "street address",
+      "account number",
+      "medicare identifier"
+    ]
+  },
+  "16_life_insurance_cash_value.pdf": {
+    "title": "Whole life policy annual statement",
+    "category": "Insurance coverage",
+    "layout": "Cash surrender value against death benefit, with an outstanding policy loan",
+    "tests": [
+      "cash surrender value is an asset while the death benefit is not",
+      "an outstanding policy loan reduces both the surrender value and the death benefit",
+      "the net surrender value is what is actually realisable"
+    ],
+    "traps": [
+      "The death benefit of $150,000 is not an asset of the living insured.",
+      "The gross cash value of $48,220.14 is reduced by an $8,400 policy loan. Net surrender value is $39,820.14.",
+      "Surrender charges apply until policy year 20."
+    ],
+    "expected": {
+      "death_benefit": 150000,
+      "gross_cash_value": 48220.14,
+      "policy_loan_outstanding": 8400,
+      "net_cash_surrender_value": 39820.14,
+      "annual_premium": 2184,
+      "in_force": true
+    },
+    "pii_present": [
+      "full name",
+      "date of birth",
+      "account number"
+    ]
+  },
+  "17_assisted_living_billing.pdf": {
+    "title": "Assisted living community invoice",
+    "category": "Care costs",
+    "layout": "Monthly community invoice with base rate, care level charges and ancillary items",
+    "tests": [
+      "recurring monthly cost of care",
+      "a one-off community fee is not a recurring expense",
+      "a level-of-care increase changes the forward-looking monthly figure"
+    ],
+    "traps": [
+      "The one-time community fee of $4,500 is not a monthly expense.",
+      "The current invoice total of $7,842.00 includes one-off items. The recurring monthly cost is $6,942.00.",
+      "The care level increases to level 3 from March, raising the recurring figure to $7,342.00."
+    ],
+    "expected": {
+      "base_monthly_rate": 5400,
+      "care_level_2_charge": 1200,
+      "recurring_monthly_current": 6942,
+      "recurring_monthly_from_march": 7342,
+      "one_time_community_fee": 4500,
+      "invoice_total": 7842
+    },
+    "pii_present": [
+      "full name",
+      "street address",
+      "account number"
+    ]
+  }
+}

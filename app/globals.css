@@ -1,0 +1,238 @@
+@import "tailwindcss";
+
+/* ───────────────────────────────── design tokens ───────────────────────── */
+
+@theme {
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: var(--font-mono-face), ui-monospace, SFMono-Regular, Consolas, monospace;
+
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-line: var(--line);
+  --color-line-2: var(--line-2);
+
+  --color-brand: var(--brand);
+  --color-brand-2: var(--brand-2);
+  --color-asset: var(--asset);
+  --color-debt: var(--debt);
+  --color-warn: var(--warn);
+
+  --radius-card: 18px;
+
+  --animate-drift: drift 28s ease-in-out infinite;
+  --animate-drift-slow: drift 44s ease-in-out infinite reverse;
+  --animate-shimmer: shimmer 2.2s linear infinite;
+  --animate-breathe: breathe 3.6s ease-in-out infinite;
+}
+
+/*
+ * A single light theme. There is no dark variant and no theme switch: one
+ * canvas means one set of contrast decisions to get right, and financial
+ * figures stay legible under the lighting of an admissions office.
+ */
+:root {
+  --ink: #0d1020;
+  --ink-2: #39415a;
+  --muted: #666f85;
+  --faint: #9aa2b4;
+  --surface: rgb(255 255 255 / 0.82);
+  --surface-2: rgb(255 255 255 / 0.96);
+  --line: rgb(13 16 32 / 0.09);
+  --line-2: rgb(13 16 32 / 0.17);
+  --canvas: #f2f4f9;
+
+  --brand: #4f46e5;
+  --brand-2: #0e7490;
+  --asset: #047857;
+  --debt: #be123c;
+  --warn: #a16207;
+
+  --shadow-card:
+    0 1px 0 0 rgb(255 255 255 / 0.9) inset,
+    0 1px 2px rgb(13 16 32 / 0.04),
+    0 18px 44px -26px rgb(13 16 32 / 0.26);
+
+  color-scheme: light;
+}
+
+/* ───────────────────────────────── base ────────────────────────────────── */
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--canvas);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.55;
+  letter-spacing: -0.011em;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+::selection {
+  background: color-mix(in oklab, var(--brand) 22%, transparent);
+  color: var(--ink);
+}
+
+::-webkit-scrollbar {
+  width: 11px;
+  height: 11px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: color-mix(in oklab, var(--muted) 34%, transparent);
+  border-radius: 99px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in oklab, var(--muted) 58%, transparent);
+  background-clip: content-box;
+}
+
+/* ───────────────────────────────── utilities ───────────────────────────── */
+
+@utility glass {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  backdrop-filter: blur(18px) saturate(150%);
+  -webkit-backdrop-filter: blur(18px) saturate(150%);
+  box-shadow: var(--shadow-card);
+}
+
+@utility tnum {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
+
+@utility text-gradient {
+  background: linear-gradient(100deg, var(--ink) 18%, var(--brand) 62%, var(--brand-2) 96%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+@utility hairline {
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in oklab, var(--line-2) 90%, transparent) 30%,
+    color-mix(in oklab, var(--line-2) 90%, transparent) 70%,
+    transparent
+  );
+}
+
+/* ───────────────────────────────── keyframes ───────────────────────────── */
+
+@keyframes drift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  33% {
+    transform: translate3d(6%, -4%, 0) scale(1.12);
+  }
+  66% {
+    transform: translate3d(-5%, 5%, 0) scale(0.94);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(220%);
+  }
+}
+
+@keyframes breathe {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.45;
+    transform: scale(0.82);
+  }
+}
+
+/* ───────────────────────────────── document styles ─────────────────────── */
+
+.doc-table {
+  border-collapse: separate;
+  border-spacing: 0;
+  width: 100%;
+  font-size: 13px;
+}
+.doc-table th,
+.doc-table td {
+  padding: 7px 11px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+.doc-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: color-mix(in oklab, var(--canvas) 92%, transparent);
+  backdrop-filter: blur(10px);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.doc-table tbody tr {
+  transition: background 0.14s ease;
+}
+.doc-table tbody tr:hover {
+  background: color-mix(in oklab, var(--brand) 6%, transparent);
+}
+.doc-table td.numeric {
+  text-align: right;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* reconstructed layout grid */
+.grid-table th {
+  background: color-mix(in oklab, var(--brand) 10%, transparent);
+  color: var(--ink);
+  font-weight: 600;
+  font-size: 11.5px;
+}
+.grid-table td.rowhead {
+  font-weight: 550;
+  color: var(--ink);
+  background: color-mix(in oklab, var(--muted) 7%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
